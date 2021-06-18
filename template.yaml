@@ -1,0 +1,23 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  access-log-lambda
+
+  Sample SAM Template for access-log-lambda
+  
+Globals:
+  Function:
+    Timeout: 3
+
+Resources:
+  AccessLogFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      PackageType: Image
+      Policies:
+        - S3ReadPolicy:
+            BucketName: "chunnoo-test-bucket"
+    Metadata:
+      DockerTag: nodejs14.x-v1
+      DockerContext: ./access-log
+      Dockerfile: Dockerfile
