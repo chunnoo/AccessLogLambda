@@ -28,5 +28,5 @@ $ sam deploy --guided
 **Test locally**
 This will still query the AWS S3 Bucket
 <pre>
-$ sam local invoke "AccessLogTestFunction" -e events/event.json
+$ sam local invoke "AccessLogFunction" -e events/event.json
 </pre>
