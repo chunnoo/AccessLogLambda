@@ -44,3 +44,10 @@ This will still query the AWS S3 Bucket
 <pre>
 $ sam local invoke "AccessLogFunction" -e events/event.json
 </pre>
+
+
+**Clean up**
+Useful when encountering deploy errors.
+<pre>
+$ aws cloudformation delete-stack --stack-name access-log-lambda --region eu-north-1
+</pre>
