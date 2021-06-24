@@ -40,17 +40,22 @@ const decompress = (buffer) =>
     zstd.stdin.end();
   });
 
-const extractQuery = (logFile) => {
+const extractInput = (uri) =>
+  decodeURIComponent(
+    uri
+      .match(/input=(.*)&jsoncallback/)[1]
+      .replace(/%22/g, '"')
+      .replace(/%5C/g, "\\")
+      .replace(/%08|%09|%0A|%0B|%0C/g, "")
+  );
+
+const formatQuery = (logFile) => {
   return logFile
     .split(/(?:\r\n|\r|\n)/g)
-    .map((line) => line.match(/input=(.*)&jsoncallback/))
-    .filter((match) => match !== null)
-    .map((match) => match[1])
-    .map((str) => str.replace(/%22/g, '"'))
-    .map((str) => str.replace(/%5C/g, "\\"))
-    .map((str) => str.replace(/%08|%09|%0A|%0B|%0C/g, ""))
-    .map((str) => decodeURIComponent(str))
-    .flat();
+    .filter((line) => line.match(/input=(.*)&jsoncallback/))
+    .map((line) => JSON.parse(line))
+    .map((obj) => ({ input: extractInput(obj.uri), time: obj.time }))
+    .map((obj) => ({ fields: obj }));
 };
 
 exports.handler = async (event, context) => {
@@ -59,10 +64,9 @@ exports.handler = async (event, context) => {
   return findRelevantKeys(options)
     .then((objs) => Promise.all(objs.map((obj) => getObjectData(obj))))
     .then((buffers) => Promise.all(buffers.map((buffer) => decompress(buffer))))
-    .then((logFiles) => logFiles.map((logFile) => extractQuery(logFile)))
+    .then((logFiles) => logFiles.map((logFile) => formatQuery(logFile)).flat())
     .then((res) => {
-      console.log("responses: ");
-      res.forEach((query) => console.log(query));
+      console.log("response: ", res);
       return { statusCode: 200 };
     })
     .catch((err) => ({ statusCode: 500, message: err }));
