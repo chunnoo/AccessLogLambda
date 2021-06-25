@@ -88,50 +88,52 @@ const getSSMParameter = (parameter) => {
   );
 };
 
-const feedingFunction = (query) => {
+const feedQuery = (query, privateKey) => {
   console.log("Feeding query to Vespa");
   const queryPath = "/document/v1/query/query/group/0/";
   const data = JSON.stringify(query);
 
-  return getSSMParameter("AccessLogPrivateKey").then(
-    (privateKeyParameter) =>
-      new Promise((resolve, reject) => {
-        const options = {
-          hostname: vespaHostname,
-          port: 443,
-          path: queryPath + query.fields.time,
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Content-Length": data.length,
-          },
-          key: privateKeyParameter.Parameter.Value,
-          cert: publicCert,
-        };
+  return new Promise((resolve, reject) => {
+    const options = {
+      hostname: vespaHostname,
+      port: 443,
+      path: queryPath + query.fields.time,
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Content-Length": data.length,
+      },
+      key: privateKey,
+      cert: publicCert,
+    };
 
-        const req = https.request(options, (res) =>
-          res.on("data", (data) => {
-            if (res.statusCode === 200) {
-              console.log(data.toString());
-              resolve();
-            } else {
-              reject(
-                Error(
-                  `Status code: ${res.statusCode}, Message: ${data.toString()}`
-                )
-              );
-            }
-          })
-        );
-
-        req.on("error", reject);
-
-        req.write(data);
-
-        req.end();
+    const req = https.request(options, (res) =>
+      res.on("data", (data) => {
+        if (res.statusCode === 200) {
+          console.log(data.toString());
+          resolve();
+        } else {
+          reject(
+            Error(`Status code: ${res.statusCode}, Message: ${data.toString()}`)
+          );
+        }
       })
-  );
+    );
+
+    req.on("error", reject);
+
+    req.write(data);
+
+    req.end();
+  });
 };
+
+const feedQueries = (queries) =>
+  getSSMParameter("AccessLogPrivateKey").then((parameter) =>
+    Promise.all(
+      queries.map((query) => feedQuery(query, parameter.Parameter.Value))
+    )
+  );
 
 exports.handler = async (event, context) => {
   const options = {
@@ -141,7 +143,7 @@ exports.handler = async (event, context) => {
 
   return getObjectData(options)
     .then(decompress)
-    .then((logFile) => Promise.all(formatQueries(logFile).map(feedingFunction)))
+    .then((logFile) => feedQueries(formatQueries(logFile)))
     .then((res) => {
       return { statusCode: 200 };
     })
