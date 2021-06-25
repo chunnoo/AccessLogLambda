@@ -3,6 +3,9 @@ const s3 = new aws.S3({ apiVersion: "2006-03-01" });
 const { spawn } = require("child_process");
 const https = require("https");
 
+const vespaHostname =
+  "my-instance.search-suggestion.chunnoo.aws-us-east-1c.dev.z.vespa-app.cloud";
+
 const publicCert = `-----BEGIN CERTIFICATE-----
 MIIEuDCCAqACCQDuqW9lydTQNDANBgkqhkiG9w0BAQsFADAeMRwwGgYDVQQDDBNj
 bG91ZC52ZXNwYS5leGFtcGxlMB4XDTIxMDYyNDA3MDY0NFoXDTIxMDcwODA3MDY0
@@ -38,7 +41,7 @@ const getObjectData = ({ Bucket, Key }) => {
     .getObject({ Bucket, Key })
     .promise()
     .then((res) => res.Body)
-    .catch((err) => Error(err));
+    .catch(Error);
 };
 
 const decompress = (buffer) =>
@@ -49,9 +52,7 @@ const decompress = (buffer) =>
       resolve(data.toString());
     });
 
-    zstd.stderr.on("data", (err) => {
-      reject(err);
-    });
+    zstd.stderr.on("data", reject);
 
     zstd.stdin.write(buffer);
     zstd.stdin.end();
@@ -66,79 +67,70 @@ const extractInput = (uri) =>
       .replace(/%08|%09|%0A|%0B|%0C/g, "")
   );
 
-const formatQuery = (logFile) =>
+const formatQueries = (logFile) =>
   logFile
     .split(/(?:\r\n|\r|\n)/g)
     .filter((line) => line.match(/input=(.*)&jsoncallback/))
-    .map((line) => JSON.parse(line))
+    .map(JSON.parse)
     .map((obj) => ({ input: extractInput(obj.uri), time: obj.time }))
     .map((obj) => ({ fields: obj }));
 
-const feedingFunction = async (feedingQuery) => {
-  console.log("Feeding query to Vespa");
-  var hostname =
-    "my-instance.search-suggestion.chunnoo.aws-us-east-1c.dev.z.vespa-app.cloud";
-  var queryPath = "/document/v1/query/query/group/0/";
-  var data = JSON.stringify(feedingQuery);
-
-  queryPath += feedingQuery.fields.time;
-
+const getSSMParameter = (parameter) => {
   const ssm = new aws.SSM();
-  const privateKeyParam = await new Promise((resolve, reject) => {
+  return new Promise((resolve, reject) =>
     ssm.getParameter(
       {
-        Name: "AccessLogPrivateKey",
+        Name: parameter,
         WithDecryption: true,
       },
-      (err, data) => {
-        if (err) {
-          return reject(err);
-        }
-        return resolve(data);
-      }
-    );
-  });
+      (err, data) => (err ? reject(err) : resolve(data))
+    )
+  );
+};
 
-  var options = {
-    hostname: hostname,
-    port: 443,
-    path: queryPath,
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Content-Length": data.length,
-    },
-    key: privateKeyParam.Parameter.Value,
-    cert: publicCert,
-  };
+const feedingFunction = (query) => {
+  console.log("Feeding query to Vespa");
+  const queryPath = "/document/v1/query/query/group/0/";
+  const data = JSON.stringify(query);
 
-  return (response = new Promise((resolve, reject) => {
-    const req = https.request(options, (res) => {
-      console.log("in req");
-      console.log("statusCode:", res.statusCode);
-      res.on("data", (d) => {
-        process.stdout.write(d);
-      });
-    });
+  return getSSMParameter("AccessLogPrivateKey").then(
+    (privateKeyParameter) =>
+      new Promise((resolve, reject) => {
+        const options = {
+          hostname: vespaHostname,
+          port: 443,
+          path: queryPath + query.fields.time,
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Content-Length": data.length,
+          },
+          key: privateKeyParameter.Parameter.Value,
+          cert: publicCert,
+        };
 
-    req.on("error", (error) => {
-      reject({
-        statusCode: 500,
-        body: "Something went wrong!",
-      });
-    });
+        const req = https.request(options, (res) =>
+          res.on("data", (data) => {
+            if (res.statusCode === 200) {
+              console.log(data.toString());
+              resolve();
+            } else {
+              reject(
+                Error(
+                  `Status code: ${res.statusCode}, Message: ${data.toString()}`
+                )
+              );
+            }
+          })
+        );
 
-    req.write(data);
+        req.on("error", reject);
 
-    req.end();
+        req.write(data);
 
-    req.on("end", () => {
-      resolve({
-        statusCode: 200,
-        body: "Success",
-      });
-    });
-  }));
+        req.end();
+      })
+  );
 };
 
 exports.handler = async (event, context) => {
@@ -148,12 +140,10 @@ exports.handler = async (event, context) => {
   };
 
   return getObjectData(options)
-    .then((buffer) => decompress(buffer))
-    .then((logFile) => formatQuery(logFile))
-    .then((queries) => Promise.all(queries.map((query) => feedingFunction(query))))
-    .then((res) => ({ statusCode: 200 }))
-    .catch((err) => {
-      console.error(err);
-      return { statusCode: 500, message: err };
-    });
+    .then(decompress)
+    .then((logFile) => Promise.all(formatQueries(logFile).map(feedingFunction)))
+    .then((res) => {
+      return { statusCode: 200 };
+    })
+    .catch((err) => ({ statusCode: 500, message: err.stack }));
 };
