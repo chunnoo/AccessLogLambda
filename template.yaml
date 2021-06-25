@@ -4,10 +4,18 @@ Description: >
   access-log-lambda
 
   Sample SAM Template for access-log-lambda
-  
+
 Globals:
   Function:
     Timeout: 10
+
+Parameters:
+  S3BucketName:
+    Type: String
+    Default: chunnoo-test-bucket
+  PrivateKeyParameterName:
+    Type: String
+    Default: AccessLogPrivateKey
 
 Resources:
   AccessLogFunction:
@@ -16,9 +24,9 @@ Resources:
       PackageType: Image
       Policies:
         - S3ReadPolicy:
-            BucketName: "olemagnustrainingbucket"
+            BucketName: !Ref S3BucketName
         - SSMParameterReadPolicy:
-            ParameterName: "ThePrivateKey"
+            ParameterName: !Ref PrivateKeyParameterName
     Metadata:
       DockerTag: nodejs14.x-v1
       DockerContext: ./access-log
