@@ -1,7 +1,8 @@
 const aws = require("aws-sdk");
 const s3 = new aws.S3({ apiVersion: "2006-03-01" });
-const { spawn } = require("child_process");
 const https = require("https");
+const ZstdCodec = require("zstd-codec").ZstdCodec;
+const TextDecoder = require("text-encoding").TextDecoder;
 
 const vespaHostname =
   "my-instance.search-suggestion.chunnoo.aws-us-east-1c.dev.z.vespa-app.cloud";
@@ -46,16 +47,15 @@ const getObjectData = ({ Bucket, Key }) => {
 
 const decompress = (buffer) =>
   new Promise((resolve, reject) => {
-    const zstd = spawn("zstd", ["-cd"]);
-
-    zstd.stdout.on("data", (data) => {
-      resolve(data.toString());
+    ZstdCodec.run((zstd) => {
+      try {
+        const simple = new zstd.Simple();
+        const data = new TextDecoder().decode(simple.decompress(buffer));
+        resolve(data);
+      } catch (err) {
+        reject(Error(err));
+      }
     });
-
-    zstd.stderr.on("data", reject);
-
-    zstd.stdin.write(buffer);
-    zstd.stdin.end();
   });
 
 const extractInput = (uri) =>
@@ -137,8 +137,8 @@ const feedQueries = (queries) =>
 
 exports.handler = async (event, context) => {
   const options = {
-    Bucket: event.detail.requestParameters.bucketName,
-    Key: decodeURIComponent(event.detail.requestParameters.key.replace(/\+/g, " ")),
+    Bucket: event.Records[0].s3.bucket.name,
+    Key: decodeURIComponent(event.Records[0].s3.object.key.replace(/\+/g, " ")),
   };
 
   return getObjectData(options)

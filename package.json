@@ -2,7 +2,7 @@
   "name": "access-log-lambda",
   "version": "1.0.0",
   "description": "",
-  "main": "app.js",
+  "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
@@ -10,6 +10,8 @@
   "license": "ISC",
   "dependencies": {
     "child_process": "^1.0.2",
-    "https": "^1.0.0"
+    "https": "^1.0.0",
+    "text-encoding": "^0.7.0",
+    "zstd-codec": "^0.1.2"
   }
 }
