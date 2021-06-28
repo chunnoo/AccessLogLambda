@@ -137,8 +137,8 @@ const feedQueries = (queries) =>
 
 exports.handler = async (event, context) => {
   const options = {
-    Bucket: event.Records[0].s3.bucket.name,
-    Key: decodeURIComponent(event.Records[0].s3.object.key.replace(/\+/g, " ")),
+    Bucket: event.detail.requestParameters.bucketName,
+    Key: decodeURIComponent(event.detail.requestParameters.key.replace(/\+/g, " ")),
   };
 
   return getObjectData(options)
