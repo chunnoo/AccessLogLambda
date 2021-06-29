@@ -41,7 +41,7 @@ const getObjectData = ({ Bucket, Key }) => {
   return s3
     .getObject({ Bucket, Key })
     .promise()
-    .then((res) => res.Body)
+    .then((res) => res.Body);
 };
 
 const decompress = (buffer) =>
