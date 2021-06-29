@@ -54,6 +54,11 @@ Give the lambda functions role the permissions **AmazonS3ReadOnlyAccess** and **
 Setup a trigger on the S3 Bucket with access logs with the event type **ObjectCreatedByPut**
 
 
+**Configure lambda**
+
+For running the lambda with the example access log, the lambda should be configured to use 256MB of memory and have an execution time of 30 seconds. The execution time should probably be increased when running on production logs.
+
+
 **Zip**
 
 <pre>
