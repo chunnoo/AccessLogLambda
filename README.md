@@ -71,3 +71,5 @@ $ zip -r function.zip index.js node_modules/
 <pre>
 $ aws lambda update-function-code --function-name access-log-lambda --zip-file fileb://function.zip
 </pre>
+
+Alternatively upload manually from the AWS Console.
