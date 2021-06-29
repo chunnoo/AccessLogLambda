@@ -42,7 +42,6 @@ const getObjectData = ({ Bucket, Key }) => {
     .getObject({ Bucket, Key })
     .promise()
     .then((res) => res.Body)
-    .catch(Error);
 };
 
 const decompress = (buffer) =>
