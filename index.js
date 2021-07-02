@@ -42,7 +42,7 @@ const listPrefixedKeys = ({ Bucket, Prefix, MaxKeys, RequestPayer }) => {
     .listObjectsV2({ Bucket, Prefix, MaxKeys, RequestPayer })
     .promise()
     .then(({ Contents }) =>
-      Contents.map((content) => ({ Bucket, Key: content.Key }))
+      Contents.map((content) => ({ Bucket, Key: content.Key, RequestPayer }))
     );
 };
 
@@ -162,9 +162,7 @@ exports.handler = async (event, context) => {
 
   return listPrefixedKeys({ Bucket, Prefix, MaxKeys, RequestPayer })
     .then((objs) => objs.filter(objectIsFromYesterday))
-    .then((objs) =>
-      Promise.all(objs.map((obj) => getObjectData({ ...obj, RequestPayer })))
-    )
+    .then((objs) => Promise.all(objs.map(getObjectData)))
     .then((buffes) => Promise.all(buffes.map(decompress)))
     .then((logFiles) =>
       Promise.all(
