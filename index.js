@@ -36,10 +36,30 @@ XG68ibZCW9B6m9rQlMcMaVUSNTGH6qpJ0KI3G63FX7d6qSRIZNpI2G8oWZCHidBM
 KvReil2oZAclH+d0
 -----END CERTIFICATE-----`;
 
-const getObjectData = ({ Bucket, Key }) => {
+const listPrefixedKeys = ({ Bucket, Prefix, MaxKeys, RequestPayer }) => {
+  console.log(`Listing keys with prefix ${Prefix} in bucket ${Bucket}`);
+  return s3
+    .listObjectsV2({ Bucket, Prefix, MaxKeys, RequestPayer })
+    .promise()
+    .then(({ Contents }) =>
+      Contents.map((content) => ({ Bucket, Key: content.Key }))
+    );
+};
+
+const objectIsFromYesterday = ({ Bucket, Key }) => {
+  const yesterdayDateString = new Date(Date.now() - 86400000)
+    .toISOString()
+    .replace(/^(\d{4})-(\d{2})-(\d{2})T[^Z]+Z/, "$1$2$3");
+  const re = new RegExp(
+    `vespa-team\/vespacloud-docsearch\/default\/[^\/]+\/logs\/access\/JsonAccessLog\.default\.${yesterdayDateString}\\d+\.zst`
+  );
+  return re.test(Key);
+};
+
+const getObjectData = ({ Bucket, Key, RequestPayer }) => {
   console.log(`Getting object with key ${Key} from bucket ${Bucket}`);
   return s3
-    .getObject({ Bucket, Key })
+    .getObject({ Bucket, Key, RequestPayer })
     .promise()
     .then((res) => res.Body);
 };
@@ -135,14 +155,22 @@ const feedQueries = (queries) =>
   );
 
 exports.handler = async (event, context) => {
-  const options = {
-    Bucket: event.Records[0].s3.bucket.name,
-    Key: decodeURIComponent(event.Records[0].s3.object.key.replace(/\+/g, " ")),
-  };
+  const Bucket = "chunnoo-test-bucket";
+  const Prefix = "vespa-team/vespacloud-docsearch/default/";
+  const MaxKeys = 15000;
+  const RequestPayer = "requester";
 
-  return getObjectData(options)
-    .then(decompress)
-    .then((logFile) => feedQueries(formatQueries(logFile)))
+  return listPrefixedKeys({ Bucket, Prefix, MaxKeys, RequestPayer })
+    .then((objs) => objs.filter(objectIsFromYesterday))
+    .then((objs) =>
+      Promise.all(objs.map((obj) => getObjectData({ ...obj, RequestPayer })))
+    )
+    .then((buffes) => Promise.all(buffes.map(decompress)))
+    .then((logFiles) =>
+      Promise.all(
+        logFiles.map((logFile) => feedQueries(formatQueries(logFile)))
+      )
+    )
     .then((res) => {
       return { statusCode: 200 };
     })

@@ -39,6 +39,11 @@ In AWS System Manager - Parameter Store, create a new parameter named **AccessLo
 In *index.js*, set **vespaHostname** to the endpoint of the Vespa application where queries should be fed and set *publicCert* to the public certificate of the same Vespa application.
 
 
+**Set bucket name**
+
+In **index.handler** set the **Bucket** to the name of the bucket containing logs.
+
+
 **Create lambda function**
 
 Create a lambda function named **access-log-lambda**
