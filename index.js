@@ -37,7 +37,9 @@ KvReil2oZAclH+d0
 -----END CERTIFICATE-----`;
 
 const listPrefixedKeys = ({ Bucket, Prefix, MaxKeys, RequestPayer }) => {
-  console.log(`Listing keys with prefix ${Prefix} in bucket ${Bucket}`);
+  console.log(
+    `Listing keys with prefix ${Prefix} in bucket ${Bucket} with RequestPyer ${RequestPayer}. limited to ${MaxKeys} keys`
+  );
   return s3
     .listObjectsV2({ Bucket, Prefix, MaxKeys, RequestPayer })
     .promise()
@@ -46,18 +48,21 @@ const listPrefixedKeys = ({ Bucket, Prefix, MaxKeys, RequestPayer }) => {
     );
 };
 
-const objectIsFromYesterday = ({ Bucket, Key }) => {
+const getYesterdayFilter = () => {
   const yesterdayDateString = new Date(Date.now() - 86400000)
     .toISOString()
     .replace(/^(\d{4})-(\d{2})-(\d{2})T[^Z]+Z/, "$1$2$3");
   const re = new RegExp(
     `vespa-team\/vespacloud-docsearch\/default\/[^\/]+\/logs\/access\/JsonAccessLog\.default\.${yesterdayDateString}\\d+\.zst`
   );
-  return re.test(Key);
+
+  return ({ Key }) => re.test(Key);
 };
 
 const getObjectData = ({ Bucket, Key, RequestPayer }) => {
-  console.log(`Getting object with key ${Key} from bucket ${Bucket}`);
+  console.log(
+    `Getting object with key ${Key} from bucket ${Bucket} with RequestPayer ${RequestPayer}`
+  );
   return s3
     .getObject({ Bucket, Key, RequestPayer })
     .promise()
@@ -161,7 +166,7 @@ exports.handler = async (event, context) => {
   const RequestPayer = "requester";
 
   return listPrefixedKeys({ Bucket, Prefix, MaxKeys, RequestPayer })
-    .then((objs) => objs.filter(objectIsFromYesterday))
+    .then((objs) => objs.filter(getYesterdayFilter()))
     .then((objs) => Promise.all(objs.map(getObjectData)))
     .then((buffes) => Promise.all(buffes.map(decompress)))
     .then((logFiles) =>
